@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Skin Problem Detector</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: auto; padding: 1rem; }
+    h1, h2 { text-align: center; }
+    input[type=file] { display: block; margin: 1rem auto; }
+    img { max-width: 100%; display: block; margin: 1rem auto; }
+    .result, .advice { margin-top: 2rem; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Skin Problem Detector</h1>
+  <p>Upload a selfie or close-up of your skin. The app will identify the issue and give you treatment tips, top product picks, and a full routine.</p>
+
+  <input type="file" id="imageUpload" accept="image/*" />
+  <img id="preview" />
+
+  <div class="result"><h2>Analysis</h2><p id="label">Waiting for image…</p></div>
+  <div class="advice"><h2>Treatment & Products</h2><div id="adviceContainer"></div></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.9.0"></script>
+  <script>
+    let model;
+    const labels = [
+      'Benign Nevus', 'Melanoma', 'Seborrheic Keratosis',
+      'Basal Cell Carcinoma', 'Actinic Keratosis',
+      'Vascular Lesion', 'Dermatofibroma'
+    ];
+    const adviceMap = {
+      'Benign Nevus': {
+        desc: 'A harmless mole. No aggressive treatment needed; monitor for changes.' ,
+        products: [
+          'CeraVe Foaming Facial Cleanser',
+          'Paula\'s Choice 2% BHA Exfoliant'
+        ]
+      },
+      'Melanoma': {
+        desc: 'High-risk lesion. Consult a dermatologist ASAP.' ,
+        products: [
+          'Use SPF 50+ daily',
+          'Keep skin protected under clothing'
+        ]
+      },
+      'Seborrheic Keratosis': {
+        desc: 'Generally benign waxy growths. Laser removal optional.' ,
+        products: [
+          'Gentle, non-comedogenic moisturizer',
+          'Avoid heavy scrubs'
+        ]
+      },
+      // … add other mappings similarly …
+    };
+    const routine = {
+      morning: [
+        'Cleanser → CeraVe Foaming Facial Cleanser',
+        'Toner/Serum → Vitamin C serum',
+        'Moisturizer → lightweight, non-comedogenic',
+        'Sunscreen → SPF ≥ 30'
+      ],
+      evening: [
+        'Cleanser → gentle oil or micellar cleanser',
+        'Treatment → retinoid/azelaic acid',
+        'Moisturizer → richer night cream'
+      ]
+    };
+
+    async function loadModel() {
+      model = await tf.loadLayersModel('model/model.json');
+    }
+
+    document.getElementById('imageUpload').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const img = document.getElementById('preview');
+      img.src = URL.createObjectURL(file);
+      img.onload = async () => {
+        const tensor = tf.browser.fromPixels(img)
+          .resizeNearestNeighbor([224,224])
+          .toFloat().div(255.0).expandDims();
+        const preds = model.predict(tensor);
+        const idx = preds.argMax(-1).dataSync()[0];
+        const label = labels[idx];
+        document.getElementById('label').textContent = label;
+
+        const container = document.getElementById('adviceContainer');
+        container.innerHTML = '';
+        const info = adviceMap[label] || {};
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `<strong>${label}</strong><p>${info.desc || 'No data available.'}</p>`;
+        container.appendChild(card);
+        if (info.products) {
+          const prodCard = document.createElement('div');
+          prodCard.className = 'card';
+          prodCard.innerHTML = `<strong>Top Products:</strong><ul>${info.products.map(p=>`<li>${p}</li>`).join('')}</ul>`;
+          container.appendChild(prodCard);
+        }
+        const routineCard = document.createElement('div');
+        routineCard.className = 'card';
+        routineCard.innerHTML =
+          `<strong>Daily Routine</strong>
+           <h4>Morning</h4><ol>${routine.morning.map(s=>`<li>${s}</li>`).join('')}</ol>
+           <h4>Evening</h4><ol>${routine.evening.map(s=>`<li>${s}</li>`).join('')}</ol>`;
+        container.appendChild(routineCard);
+      };
+    });
+
+    loadModel();
+  </script>
+</body>
+</html>
